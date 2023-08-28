@@ -14,7 +14,7 @@ import matplotlib.cm as cm
 import matplotlib.colors as colors
 
 # Custom color modules
-import custom_colormap_functions
+from . import custom_colormap_functions
 
 # Perceptually uniform grayscale colormap
 def gray_uniform(name='gray_uniform', num_points=1024, colorspace='CAM02UCS'):
@@ -257,7 +257,7 @@ def red_white_blue(name='red_white_blue', **kwargs):
   blue_arg = 0.9
   red_loc = 0.2
   blue_loc = 0.8
-  white_jjp = 95.0
+  white_jjp = 100.0
   white_left_ab = (0.0, 0.0)
   white_right_ab = (0.0, 0.0)
   white_ab_factor = 0.1
@@ -311,6 +311,70 @@ def red_white_blue(name='red_white_blue', **kwargs):
 
   # Create colormap
   return custom_colormap_functions.linear_segment(anchors, below_jjab, above_jjab, name=name, **kwargs)
+
+# Red-white-blue uniform lightness diverging colormap, reversed
+def red_white_blue_r(name='red_white_blue_r', **kwargs):
+
+  # Parameters
+  red_arg = 0.89
+  blue_arg = 0.11
+  red_loc = 0.19
+  blue_loc = 0.81
+  white_jjp = 100.0
+  white_left_ab = (0.0, 0.0)
+  white_right_ab = (0.0, 0.0)
+  white_ab_factor = 0.1
+  color_stretch = 10.0
+  balance_ab = True
+  match_lightness = True
+  num_half_intervals = 32
+
+  # Define initial anchor values
+  red_rgb1 = cm.get_cmap('RdBu')(red_arg)[:-1]
+  blue_rgb1 = cm.get_cmap('RdBu')(blue_arg)[:-1]
+
+  # Convert to perceptually uniform space
+  red_jjab = cs.cspace_convert(red_rgb1, 'sRGB1', cs.CAM02UCS)
+  blue_jjab = cs.cspace_convert(blue_rgb1, 'sRGB1', cs.CAM02UCS)
+  if balance_ab:
+    ap = 0.5 * (red_jjab[1] - blue_jjab[2])
+    bp = 0.5 * (red_jjab[2] - blue_jjab[1])
+    red_jjab[1:] = (ap, bp)
+    blue_jjab[1:] = (-bp, -ap)
+
+  # Adjust anchors
+  red_jjab[0] = white_jjp + (red_jjab[0] - white_jjp) / (red_loc - 0.5) * (0.0 - 0.5)
+  blue_jjab[0] = white_jjp + (blue_jjab[0] - white_jjp) / (blue_loc - 0.5) * (1.0 - 0.5)
+  if match_lightness:
+    end_jjp = 0.5 * (red_jjab[0] + blue_jjab[0])
+    red_jjab[0] = end_jjp
+    blue_jjab[0] = end_jjp
+  white_left_ab = (1.0 - white_ab_factor) * np.array(white_left_ab) + white_ab_factor * red_jjab[1:]
+  white_right_ab = (1.0 - white_ab_factor) * np.array(white_right_ab) + white_ab_factor * blue_jjab[1:]
+
+  # Calculate anchor points and values for half intervals
+  anchors_half = np.linspace(0.0, 1.0, num_half_intervals + 1)
+  interp_half = custom_colormap_functions.bump_function(anchors_half, color_stretch)
+  left_jjp = np.linspace(red_jjab[0], white_jjp, num_half_intervals + 1)
+  left_ap = white_left_ab[0] + (red_jjab[1] - white_left_ab[0]) * interp_half
+  left_bp = white_left_ab[1] + (red_jjab[2] - white_left_ab[1]) * interp_half
+  right_jjp = np.linspace(blue_jjab[0], white_jjp, num_half_intervals + 1)
+  right_ap = white_right_ab[0] + (blue_jjab[1] - white_right_ab[0]) * interp_half
+  right_bp = white_right_ab[1] + (blue_jjab[2] - white_right_ab[1]) * interp_half
+
+  # Assemble anchor points and values for full interval
+  anchors = np.linspace(0.0, 1.0, 2 * num_half_intervals + 1)
+  jjp = np.concatenate((left_jjp, right_jjp[-2::-1]))
+  below_ap = np.concatenate((left_ap, right_ap[-2::-1]))
+  below_bp = np.concatenate((left_bp, right_bp[-2::-1]))
+  above_ap = np.concatenate((left_ap[:-1], right_ap[::-1]))
+  above_bp = np.concatenate((left_bp[:-1], right_bp[::-1]))
+  below_jjab = np.hstack((jjp[:,None], below_ap[:,None], below_bp[:,None]))
+  above_jjab = np.hstack((jjp[:,None], above_ap[:,None], above_bp[:,None]))
+
+  # Create colormap
+  return custom_colormap_functions.linear_segment(anchors, below_jjab, above_jjab, name=name, **kwargs)
+
 
 # Red-black-blue uniform lightness diverging colormap
 def red_black_blue(name='red_black_blue', **kwargs):
